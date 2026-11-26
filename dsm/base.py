@@ -138,6 +138,11 @@ class DsmClient(ABC):
     def audit_logs(self, size: int = 50) -> list[dict]: ...
 
 
+def session_expired(status: int, body: Any) -> bool:
+    """DSM answers 401 for a bad token but 403 'The session has expired' for an old one."""
+    return status == 401 or (status == 403 and "session has expired" in str(body).lower())
+
+
 def parse_audit_hits(r: Any) -> list[dict]:
     """DSM returns audit logs Elasticsearch-style: {"hits": [{"_source": {...}}]}."""
     if isinstance(r, dict):

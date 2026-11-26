@@ -14,7 +14,7 @@ import sdkms.v1 as v1
 from sdkms.v1.rest import ApiException
 
 from .base import (DEMO_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS, DsmClient, DsmError, EncryptResult,
-                   KeyInfo, parse_audit_hits)
+                   KeyInfo, parse_audit_hits, session_expired)
 from .rest_client import key_info_from_json
 
 
@@ -43,7 +43,7 @@ class SdkDsmClient(DsmClient):
         self.api = v1.ApiClient(configuration=self.cfg)
         self._authed = False
 
-    def _sdk(self, label: str, path: str, fn, request=None):
+    def _sdk(self, label: str, path: str, fn, request=None, _retry: bool = True):
         """Run one SDK call and record it like a REST call for the inspector."""
         if not self._authed:
             self.authenticate()
@@ -52,8 +52,10 @@ class SdkDsmClient(DsmClient):
             res = fn()
         except ApiException as e:
             self._record(label, path, request, e.status, e.body, started)
-            if e.status == 401:
+            if session_expired(e.status, e.body):
                 self._authed = False
+                if _retry:                       # token expired -> re-auth once and retry
+                    return self._sdk(label, path, fn, request, _retry=False)
             raise DsmError(f"DSM SDK {label} -> {e.status}: {e.body}") from e
         shown = res.to_dict() if hasattr(res, "to_dict") else (
             [r.to_dict() for r in res] if isinstance(res, list) else res)

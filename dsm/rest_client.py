@@ -16,7 +16,7 @@ from typing import Any, Optional
 import requests
 
 from .base import (DEMO_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS, DsmClient, DsmError, EncryptResult,
-                   KeyInfo, b64d, b64e, parse_audit_hits)
+                   KeyInfo, b64d, b64e, parse_audit_hits, session_expired)
 
 
 def key_info_from_json(j: dict) -> KeyInfo:
@@ -58,7 +58,7 @@ class RestDsmClient(DsmClient):
         payload = r.json() if r.content and "json" in r.headers.get("content-type", "") else r.text
         self._record(method, path + (f"?{requests.compat.urlencode(params)}" if params else ""),
                      body, r.status_code, payload, started)
-        if r.status_code == 401 and _retry:          # token expired -> re-auth once
+        if _retry and session_expired(r.status_code, payload):   # token expired -> re-auth once
             self._token = None
             return self._call(method, path, body, params, _retry=False)
         if r.status_code >= 400:
