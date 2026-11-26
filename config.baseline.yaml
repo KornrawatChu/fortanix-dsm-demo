@@ -1,0 +1,26 @@
+# =====================================================================
+#  [DSM-POLICY]  Encryption policy for the whole application
+#  This is the ONLY place the application decides HOW data is encrypted.
+#  Changing algorithm = change a value here (+ re-encrypt old data).
+#  No business code (customer service, DB layer, reports) changes.
+# =====================================================================
+
+encryption:
+  # direct   : app sends field to DSM, DSM encrypts, key never leaves DSM
+  # envelope : app encrypts locally with a DEK, DSM only wraps the DEK (KEK)
+  pattern: direct
+
+  # DSM Security Object NAME (not kid). DSM always uses its latest version,
+  # so a key rotation in DSM needs zero change here.
+  key_name: kbtg-demo-aes128
+
+  # The key TYPE (AES or RSA) is NOT configured here - the app asks DSM.
+  # These say which mode to use for each type:
+  mode: CBC                     # when the key is AES:  CBC | GCM
+  rsa_mode: OAEP_MGF1_SHA256    # when the key is RSA
+
+envelope:
+  kek_name: kbtg-demo-kek          # Key-Encryption-Key, lives in DSM
+  kek_mode: GCM                    # how DSM wraps the DEK
+  local_algorithm: AES-256-GCM     # how the APP encrypts data with the DEK
+  dek_max_records: 100             # re-use one DEK for N records, then make a new one

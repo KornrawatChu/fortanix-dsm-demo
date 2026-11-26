@@ -1,0 +1,24 @@
+# Horizon Bank demo database (PostgreSQL).
+#   docker compose up -d        start
+#   docker compose down         stop (data kept in the pgdata volume)
+#   docker compose down -v      stop AND wipe all data (fresh demo)
+# Credentials come from .env (PG_PASSWORD). Bound to localhost only.
+services:
+  postgres:
+    image: postgres:16.4
+    container_name: horizon-bank-db
+    environment:
+      POSTGRES_DB: horizon_bank
+      POSTGRES_USER: bank_app
+      POSTGRES_PASSWORD: ${PG_PASSWORD:?set PG_PASSWORD in .env}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bank_app -d horizon_bank"]
+      interval: 3s
+      retries: 20
+
+volumes:
+  pgdata:

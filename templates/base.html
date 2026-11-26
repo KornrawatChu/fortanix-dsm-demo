@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Horizon Bank{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="{% block body_class %}customer{% endblock %}">
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="{{ url_for('apply_form') }}">
+        <span class="logo" aria-hidden="true">◆</span>
+        <span>Horizon Bank</span>
+        {% block brand_suffix %}{% endblock %}
+      </a>
+      <nav>{% block nav %}<a href="{{ url_for('apply_form') }}">Open an account</a>{% endblock %}</nav>
+    </div>
+  </header>
+  <main class="wrap">{% block content %}{% endblock %}</main>
+  <footer class="wrap footer">Fictional bank for a Fortanix DSM demonstration. No real customer data.</footer>
+</body>
+</html>

@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Open a savings account · Horizon Bank{% endblock %}
+{% block content %}
+{% set f = form or {} %}
+<section class="hero">
+  <h1>Open your account online</h1>
+  <p>Takes about 3 minutes. Have your national ID card ready.</p>
+</section>
+
+<form class="card form" method="post" action="{{ url_for('apply_submit') }}" autocomplete="off">
+  {% if error %}<div class="alert">{{ error }}</div>{% endif %}
+
+  <div class="form-head">
+    <h2>Personal information</h2>
+    <button type="button" class="link-btn" id="fill-sample" data-sample='{{ sample }}'>Fill sample data</button>
+  </div>
+  <div class="grid">
+    <label class="col-2">Title
+      <select name="title" required>
+        {% for t in ["Mr.", "Ms.", "Mrs."] %}<option {% if f.title == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="col-5">First name<input name="first_name" value="{{ f.first_name }}" required></label>
+    <label class="col-5">Last name<input name="last_name" value="{{ f.last_name }}" required></label>
+    <label class="col-6">National ID number<input name="national_id" value="{{ f.national_id }}" placeholder="1-2345-67890-12-3" required></label>
+    <label class="col-6">Date of birth<input type="date" name="date_of_birth" value="{{ f.date_of_birth }}" required></label>
+  </div>
+
+  <h2>Contact details</h2>
+  <div class="grid">
+    <label class="col-6">Mobile number<input name="mobile" value="{{ f.mobile }}" placeholder="08x-xxx-xxxx" required></label>
+    <label class="col-6">Email<input type="email" name="email" value="{{ f.email }}" required></label>
+    <label class="col-12">Address<textarea name="address" rows="2" required>{{ f.address }}</textarea></label>
+  </div>
+
+  <h2>Financial information</h2>
+  <div class="grid">
+    <label class="col-6">Occupation
+      <select name="occupation">
+        {% for o in ["Employee", "Business owner", "Civil servant", "Freelance", "Student", "Retired"] %}
+        <option {% if f.occupation == o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+      </select>
+    </label>
+    <label class="col-6">Monthly income (THB)<input type="number" name="monthly_income" min="0" value="{{ f.monthly_income }}" required></label>
+  </div>
+
+  <h2>Account type</h2>
+  <div class="choices">
+    {% for a, d in [("Savings", "Everyday account, no minimum balance"), ("Fixed Deposit", "12-month term, higher interest"), ("Current", "For business transactions")] %}
+    <label class="choice"><input type="radio" name="account_type" value="{{ a }}" {% if f.account_type == a or (not f.account_type and loop.first) %}checked{% endif %}>
+      <span><strong>{{ a }}</strong><small>{{ d }}</small></span></label>
+    {% endfor %}
+  </div>
+
+  <label class="consent"><input type="checkbox" required> I confirm the information is correct and consent to Horizon Bank processing my personal data.</label>
+  <div class="actions"><button class="primary" type="submit">Submit application</button></div>
+</form>
+
+<script>
+  document.getElementById('fill-sample').addEventListener('click', function () {
+    const s = JSON.parse(this.dataset.sample);
+    for (const [k, v] of Object.entries(s)) {
+      const els = document.getElementsByName(k);
+      els.forEach(el => { if (el.type === 'radio') el.checked = (el.value === v); else el.value = v; });
+    }
+  });
+</script>
+{% endblock %}

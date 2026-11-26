@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}{{ app.ref_no }} · Back office{% endblock %}
+{% block body_class %}staff{% endblock %}
+{% block brand_suffix %}<span class="tag">Back office</span>{% endblock %}
+{% block nav %}<a href="{{ url_for('staff_list') }}">Applications</a><a href="{{ url_for('apply_form') }}">Customer site ↗</a>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>{{ app.title }} {{ app.first_name }} {{ app.last_name }} <span class="mono muted small">{{ app.ref_no }}</span></h1>
+  <a href="{{ url_for('staff_list') }}">← All applications</a>
+</div>
+
+<div class="two-col">
+  <section class="card">
+    <h2>Application <span class="pill ok">decrypted via Fortanix DSM</span></h2>
+    <dl class="summary">
+      <dt>National ID</dt><dd class="mono">{{ app.national_id }}</dd>
+      <dt>Date of birth</dt><dd>{{ app.date_of_birth }}</dd>
+      <dt>Mobile</dt><dd>{{ app.mobile }}</dd>
+      <dt>Email</dt><dd>{{ app.email }}</dd>
+      <dt>Address</dt><dd>{{ app.address }}</dd>
+      <dt>Occupation</dt><dd>{{ app.occupation }}</dd>
+      <dt>Monthly income</dt><dd>{{ "{:,}".format(app.monthly_income|int) }} THB</dd>
+      <dt>Account type</dt><dd>{{ app.account_type }}</dd>
+    </dl>
+  </section>
+
+  <section class="card dark">
+    <h2>Same record in the database</h2>
+    <p class="muted">What a DBA, a backup file or an attacker with SQL access sees.
+      Each value records the key version (<code>kid</code>) and algorithm used.</p>
+    {% for f in fields %}
+      <div class="raw"><span class="raw-name">{{ f }}</span><pre>{{ stored[f] }}</pre></div>
+    {% endfor %}
+  </section>
+</div>
+{% endblock %}

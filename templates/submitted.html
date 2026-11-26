@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Application received · Horizon Bank{% endblock %}
+{% block content %}
+<section class="card done">
+  <div class="tick" aria-hidden="true">✓</div>
+  <h1>Application received</h1>
+  <p>Thank you, {{ app.title }} {{ app.first_name }}. We will contact you within 1 business day.</p>
+  <dl class="summary">
+    <dt>Reference number</dt><dd class="mono">{{ app.ref_no }}</dd>
+    <dt>Account type</dt><dd>{{ app.account_type }}</dd>
+    <dt>Submitted</dt><dd>{{ app.created_at.replace('T', ' ') }}</dd>
+  </dl>
+  <a class="primary btn" href="{{ url_for('apply_form') }}">Submit another application</a>
+</section>
+{% endblock %}

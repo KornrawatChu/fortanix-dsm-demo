@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Back office · Applications{% endblock %}
+{% block body_class %}staff{% endblock %}
+{% block brand_suffix %}<span class="tag">Back office</span>{% endblock %}
+{% block nav %}<a href="{{ url_for('staff_list') }}">Applications</a><a href="{{ url_for('apply_form') }}">Customer site ↗</a>{% endblock %}
+{% block content %}
+<div class="page-head">
+  <h1>Account applications</h1>
+  <div class="policy">
+    <span>Encryption policy <code>config.yaml</code></span>
+    <div>
+    {% if policy.pattern == "direct" %}
+      <b>{{ policy.key_name }}</b> · <b>AES-{{ policy.mode }}</b>
+    {% else %}
+      <b>envelope</b> · KEK <b>{{ policy.kek_name }}</b> · <b>{{ policy.local_algorithm }}</b>
+    {% endif %}
+    </div>
+    <span class="muted">via {{ backend }} · {{ endpoint }}</span>
+    <span class="muted">Database: {{ database }}</span>
+  </div>
+</div>
+
+{% if rows %}
+<table class="card table">
+  <thead><tr><th>Reference</th><th>Name</th><th>Account</th><th>Submitted</th><th>National ID as stored</th><th>Protected by</th><th></th></tr></thead>
+  <tbody>
+  {% for r in rows %}
+    <tr>
+      <td class="mono">{{ r.ref_no }}</td>
+      <td>{{ r.title }} {{ r.first_name }} {{ r.last_name }}</td>
+      <td>{{ r.account_type }}</td>
+      <td>{{ r.created_at.replace('T', ' ') }}</td>
+      <td class="mono cipher">{{ r.national_id[:42] }}…</td>
+      <td><span class="pill">{{ r.protection.algorithm }}</span><br><small class="muted">{{ r.protection.key_name }} · kid {{ r.protection.kid[:8] }}</small></td>
+      <td><a href="{{ url_for('staff_detail', ref_no=r.ref_no) }}">Open →</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<div class="card empty">No applications yet. <a href="{{ url_for('apply_form') }}">Submit one from the customer site.</a></div>
+{% endif %}
+{% endblock %}
