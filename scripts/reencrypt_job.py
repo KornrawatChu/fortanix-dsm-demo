@@ -4,14 +4,18 @@ Batch re-encryption: bring every stored value up to the CURRENT policy in config
 Safe to stop and re-run: each value carries its own metadata, so the job only
 touches values that are not current, and the app keeps working during migration.
 
-    python reencrypt_job.py                 # account_applications (the form app)
-    python reencrypt_job.py customers       # table used by the engineer console
+    python scripts/reencrypt_job.py             # account_applications (the form app)
+    python scripts/reencrypt_job.py customers   # table used by the engineer console
 """
 from __future__ import annotations
 
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
+
 from typing import Callable, Optional, Sequence
 
-from crypto_service import FieldEncryptor, describe, is_current
+from dsm_crypto.crypto_service import FieldEncryptor, describe, is_current
 
 
 def current_kid(enc: FieldEncryptor) -> Optional[str]:
@@ -21,10 +25,10 @@ def current_kid(enc: FieldEncryptor) -> Optional[str]:
 
 
 def run(db, enc: FieldEncryptor, progress: Optional[Callable[[int, int], None]] = None,
-        table: str = "customers", fields: Optional[Sequence[str]] = None) -> dict:
+        table: str = "account_applications", fields: Optional[Sequence[str]] = None) -> dict:
     if fields is None:
-        from customer_repository import SENSITIVE
-        fields = SENSITIVE
+        from app.account_repository import ENCRYPTED_FIELDS
+        fields = ENCRYPTED_FIELDS
     kid = current_kid(enc)
     rows = db.execute(f"SELECT id, {', '.join(fields)} FROM {table} ORDER BY id").fetchall()
     stats = {"rows": len(rows), "rows_processed": 0, "values_checked": 0,
@@ -68,17 +72,17 @@ if __name__ == "__main__":
 
     from dotenv import load_dotenv
 
-    import settings
-    from dsm import create_client
+    from dsm_crypto import settings
+    from dsm_crypto.dsm import create_client
 
     from pathlib import Path
-    load_dotenv(Path(__file__).resolve().parent / ".env")
+    load_dotenv(Path(__file__).resolve().parents[1] / ".env")
     table = sys.argv[1] if len(sys.argv) > 1 else "account_applications"
     if table == "account_applications":
-        import account_repository as repo
+        from app import account_repository as repo
         db, fields = repo.connect(), repo.ENCRYPTED_FIELDS
     else:
-        import customer_repository as repo
+        from extras import customer_repository as repo
         db, fields = repo.connect(), repo.SENSITIVE
 
     def show(title: str) -> None:

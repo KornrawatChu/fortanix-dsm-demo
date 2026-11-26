@@ -11,8 +11,8 @@ import secrets
 from datetime import datetime
 from pathlib import Path
 
-import database
-from crypto_service import FieldEncryptor
+from dsm_crypto import database
+from dsm_crypto.crypto_service import FieldEncryptor
 
 TABLE = "account_applications"
 

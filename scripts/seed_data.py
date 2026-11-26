@@ -3,22 +3,26 @@ Fill the database with fake account applications - encrypted through DSM with
 the CURRENT policy in config.yaml. Use before the re-encryption scene so the
 job runs long enough to submit a form / press Ctrl+C while it is working.
 
-    python seed_data.py          # 100 applications (~6 DSM calls each)
-    python seed_data.py 30
+    python scripts/seed_data.py          # 100 applications (~6 DSM calls each)
+    python scripts/seed_data.py 30
 """
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
 import sys
 import time
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
-import account_repository as repo  # noqa: E402
-import mock_data  # noqa: E402
-import settings  # noqa: E402
-from crypto_service import FieldEncryptor  # noqa: E402
-from dsm import create_client  # noqa: E402
+from app import account_repository as repo  # noqa: E402
+from app import mock_data  # noqa: E402
+from dsm_crypto import settings  # noqa: E402
+from dsm_crypto.crypto_service import FieldEncryptor  # noqa: E402
+from dsm_crypto.dsm import create_client  # noqa: E402
 
 n = int(sys.argv[1]) if len(sys.argv) > 1 else 100
 db = repo.connect()

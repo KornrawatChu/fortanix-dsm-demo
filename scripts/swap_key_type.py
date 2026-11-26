@@ -9,15 +9,19 @@ Apps that encrypt by NAME start using the new key automatically.
 
 This is the same thing you can do by hand in the DSM UI (Security Objects).
 
-    python swap_key_type.py                              # kbtg-demo-data-key -> AES-256
-    python swap_key_type.py kbtg-demo-data-key RSA       # swap back (to rehearse again)
+    python scripts/swap_key_type.py                              # kbtg-demo-data-key -> AES-256
+    python scripts/swap_key_type.py kbtg-demo-data-key RSA       # swap back (to rehearse again)
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
 
 import sys
 from datetime import datetime
 
-from dsm import DsmClient, DsmError
+from dsm_crypto.dsm import DsmClient, DsmError
 
 
 def swap(dsm: DsmClient, name: str, new_type: str = "AES", size: int | None = None):
@@ -40,9 +44,9 @@ def swap(dsm: DsmClient, name: str, new_type: str = "AES", size: int | None = No
 if __name__ == "__main__":
     from dotenv import load_dotenv
 
-    from dsm import create_client
+    from dsm_crypto.dsm import create_client
 
-    load_dotenv()
+    load_dotenv(_Path(__file__).resolve().parents[1] / ".env")
     name = sys.argv[1] if len(sys.argv) > 1 else "kbtg-demo-data-key"
     new_type = (sys.argv[2] if len(sys.argv) > 2 else "AES").upper()
     old, retired, new = swap(create_client(), name, new_type)

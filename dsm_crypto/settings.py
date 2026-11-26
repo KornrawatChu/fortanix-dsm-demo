@@ -9,9 +9,9 @@ from pathlib import Path
 
 import yaml
 
-ROOT = Path(__file__).resolve().parent
-CONFIG = ROOT / "config.yaml"
-BASELINE = ROOT / "config.baseline.yaml"
+ROOT = Path(__file__).resolve().parents[1]          # project root
+CONFIG = ROOT / "config" / "config.yaml"
+BASELINE = ROOT / "config" / "config.baseline.yaml"
 
 
 @dataclass(frozen=True)

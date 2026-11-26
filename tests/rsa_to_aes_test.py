@@ -13,15 +13,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv  # noqa: E402
 
-import account_repository as repo  # noqa: E402
-import reencrypt_job  # noqa: E402
-from mock_data import applicant as sample_applicant  # noqa: E402
-from crypto_service import FieldEncryptor, describe  # noqa: E402
-from dsm import create_client  # noqa: E402
-from dsm.mock_client import MockDsmClient  # noqa: E402
-from settings import Settings  # noqa: E402
-from setup_dsm import ensure_keys  # noqa: E402
-from swap_key_type import swap  # noqa: E402
+from app import account_repository as repo  # noqa: E402
+from scripts import reencrypt_job  # noqa: E402
+from app.mock_data import applicant as sample_applicant  # noqa: E402
+from dsm_crypto.crypto_service import FieldEncryptor, describe  # noqa: E402
+from dsm_crypto.dsm import create_client  # noqa: E402
+from dsm_crypto.dsm.mock_client import MockDsmClient  # noqa: E402
+from dsm_crypto.settings import Settings  # noqa: E402
+from scripts.provision_dsm import ensure_keys  # noqa: E402
+from scripts.swap_key_type import swap  # noqa: E402
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 tmp = Path(tempfile.mkdtemp())

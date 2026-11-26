@@ -4,10 +4,14 @@ Horizon Bank (fictional) - online account opening.
 A deliberately ordinary web app. The only thing special about it is that PII is
 encrypted with keys held in Fortanix DSM before it is written to the database.
 
-    python bank_app.py          ->  http://localhost:5000          (customer form)
+    python app/bank_app.py          ->  http://localhost:5000          (customer form)
                                     http://localhost:5000/staff    (back office)
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
 
 import json
 import os
@@ -16,13 +20,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 from flask import Flask, abort, redirect, render_template, request, url_for
 
-import account_repository as repo
-import mock_data
-import settings
-from crypto_service import FieldEncryptor, describe
-from dsm import DsmError, create_client
+from app import account_repository as repo
+from app import mock_data
+from dsm_crypto import settings
+from dsm_crypto.crypto_service import FieldEncryptor, describe
+from dsm_crypto.dsm import DsmError, create_client
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]   # project root (.env lives here)
 load_dotenv(ROOT / ".env")
 
 app = Flask(__name__)

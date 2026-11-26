@@ -53,7 +53,7 @@ def _pg_connect(url: str):
 def connect(target: str | Path | None = None) -> Db:
     """target: a SQLite file path, a postgresql:// URL, or None -> DATABASE_URL / default SQLite."""
     if target is None:
-        target = os.getenv("DATABASE_URL") or Path(__file__).resolve().parent / "data" / "bank.db"
+        target = os.getenv("DATABASE_URL") or Path(__file__).resolve().parents[1] / "data" / "bank.db"
     if isinstance(target, str) and target.startswith("postgres"):
         conn = _pg_connect(target)
         info = conn.info

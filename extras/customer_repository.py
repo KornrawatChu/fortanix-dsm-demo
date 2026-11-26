@@ -10,9 +10,9 @@ import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-from crypto_service import FieldEncryptor
+from dsm_crypto.crypto_service import FieldEncryptor
 
-DB_PATH = Path(__file__).resolve().parent / "data" / "bank.db"
+DB_PATH = Path(__file__).resolve().parents[1] / "data" / "bank.db"
 SENSITIVE = ("national_id", "account_no", "phone")
 
 

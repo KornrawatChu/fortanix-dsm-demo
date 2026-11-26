@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .base import DsmClient, DsmError, EncryptResult, KeyInfo  # noqa: F401
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]   # project root
 
 
 def create_client(backend: str | None = None) -> DsmClient:

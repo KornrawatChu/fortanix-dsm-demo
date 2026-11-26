@@ -11,30 +11,46 @@ The customer sees a normal app. The integration is shown where developers really
 | Customer site (form) | `http://localhost:5000` |
 | Back office (decrypted view + raw DB values) | `http://localhost:5000/staff` |
 | DSM audit log / keys | DSM UI (`https://apac.smartkey.io`) |
-| Engineer console (deep-dive backup: benchmarks, key inventory) | `streamlit run console_app.py` |
+| Engineer console (deep-dive backup: benchmarks, key inventory) | `streamlit run extras/console_app.py` |
 
 ## Project layout
 
-| File | Role |
+```
+DSM-Demo/
+├── app/            ① The app the customer sees (Horizon Bank, Flask)
+├── dsm_crypto/     ② Shared library: the DSM integration point + encryption policy
+├── config/         ③ Values you change during the demo (not code)
+├── scripts/        ④ Commands you run before / during the demo
+├── extras/         ⑤ Optional helpers (engineer console, anti-pattern)
+├── tests/          End-to-end tests (mock or real DSM)
+└── docs/           Demo script
+```
+
+| Path | Role |
 |---|---|
-| `bank_app.py` + `templates/` + `static/` | Customer form + back office (Flask) |
-| `account_repository.py` | Business code — calls `protect()` / `reveal()`, no crypto knowledge |
-| `database.py` + `docker-compose.yml` | PostgreSQL (Docker) or SQLite — the DB only ever sees ciphertext |
-| `show_db.py` | Prints what is stored (kid per record) straight from the DB |
-| `seed_data.py` | Adds N fake applications (default 100) for the re-encryption scene |
-| `crypto_service.py` | `[DSM-POLICY]` `protect()` / `reveal()` — direct & envelope, self-describing records |
-| `config.yaml` | `[DSM-POLICY]` **The only file that changes** when the algorithm changes (auto-copied from `config.baseline.yaml`) |
-| `dsm/rest_client.py` | `[DSM-INTEGRATION 1–3/3]` auth · encrypt · decrypt over REST |
-| `dsm/sdk_client.py` | Same three integration points via the official SDK `sdkms` |
-| `dsm/mock_client.py` | Offline DSM simulator (set `DSM_BACKEND=mock` in `.env`) |
-| `reencrypt_job.py` | Online re-encryption to the current policy; commits per row, Ctrl+C is safe, re-run resumes |
-| `legacy_hardcoded.py` | Anti-pattern for comparison (not executed) |
-| `setup_dsm.py` | Creates demo keys in DSM (incl. `kbtg-demo-data-key`, RSA-2048) |
-| `swap_key_type.py` | Changes the key type behind a name (RSA ↔ AES) |
-| `console_app.py` | Streamlit engineer console (backup for deep-dive Q&A) |
-| `tests/smoke_test.py` | End-to-end test of scenarios A–C + envelope |
-| `tests/rsa_to_aes_test.py` | End-to-end test of scenario E (RSA → AES, same name) |
-| `tests/pqc_envelope_test.py` | End-to-end test of scenario G (envelope KEK RSA → ML-KEM) |
+| `app/bank_app.py` + `templates/` + `static/` | Customer form + back office (Flask) |
+| `app/account_repository.py` | Business code: calls `protect()` / `reveal()`, no crypto knowledge |
+| `app/mock_data.py` | Fake Thai applicants ("Fill sample data", seeding, tests) |
+| `dsm_crypto/dsm/rest_client.py` | `[DSM-INTEGRATION 1–3/3]` auth · encrypt · decrypt over REST (+ ML-KEM encapsulate/decapsulate) |
+| `dsm_crypto/dsm/sdk_client.py` | Same integration points via the official SDK `sdkms` |
+| `dsm_crypto/dsm/mock_client.py` | Offline DSM simulator (`DSM_BACKEND=mock` in `.env`) |
+| `dsm_crypto/crypto_service.py` | `[DSM-POLICY]` `protect()` / `reveal()`: direct & envelope, self-describing records |
+| `dsm_crypto/settings.py`, `database.py` | Reads `config/config.yaml`; PostgreSQL (Docker) or SQLite |
+| `config/config.yaml` | `[DSM-POLICY]` **The only file that changes** when the algorithm changes (auto-copied from `config.baseline.yaml`, git-ignored) |
+| `config/demo_keys.yaml` | Keys the security team provisions in DSM; **the app never reads it** |
+| `scripts/provision_dsm.py` | Creates the keys in `demo_keys.yaml` that are missing |
+| `scripts/reencrypt_job.py` | Online re-encryption to the current policy; commits per row, Ctrl+C is safe, re-run resumes |
+| `scripts/swap_key_type.py` | Changes the key type behind a name (RSA ↔ AES) |
+| `scripts/seed_data.py` | Adds N fake applications (default 100) for the re-encryption scene |
+| `scripts/show_db.py` | Prints what is stored (kid per record) straight from the DB |
+| `extras/console_app.py` | Streamlit engineer console (backup for deep-dive Q&A) |
+| `extras/legacy_hardcoded.py` | Anti-pattern for comparison (not executed) |
+| `tests/smoke_test.py` | Scenarios A–C + envelope |
+| `tests/rsa_to_aes_test.py` | Scenario E (RSA → AES, same name) |
+| `tests/pqc_envelope_test.py` | Scenario G (envelope KEK RSA → ML-KEM) |
+| `docs/DEMO_SCRIPT.md` | Step-by-step demo script (Thai) |
+
+Run every command from the `DSM-Demo` folder.
 
 ## 1. Prepare Fortanix DSM SaaS (one time, ~5 min)
 
@@ -54,9 +70,9 @@ The virtual environment lives **outside OneDrive** so thousands of package files
 ```powershell
 python -m venv $env:USERPROFILE\.venvs\kbtg-dsm-demo
 & $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\python.exe -m pip install -r requirements.txt
-& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\python.exe setup_dsm.py
+& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\python.exe scripts\provision_dsm.py
 docker compose up -d          # PostgreSQL 16 on 127.0.0.1:5432 (needs Docker Desktop running)
-& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\python.exe bank_app.py
+& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\python.exe appank_app.py
 ```
 
 ### Database
@@ -72,12 +88,12 @@ SELECT ref_no, first_name, last_name, national_id, mobile, monthly_income FROM a
 ```
 Or without DBeaver: `docker exec -it horizon-bank-db psql -U bank_app -d horizon_bank`
 
-Optional engineer console: `& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\streamlit.exe run console_app.py`
+Optional engineer console: `& $env:USERPROFILE\.venvs\kbtg-dsm-demo\Scripts\streamlit.exe run extras\console_app.py`
 
-**Reset between sessions:** stop the app, `docker compose down -v` + `docker compose up -d`, delete `config.yaml`
+**Reset between sessions:** stop the app, `docker compose down -v` + `docker compose up -d`, delete `config\config.yaml`
 (it is recreated from the baseline).
 
-`setup_dsm.py` creates three AES keys in DSM (non-exportable): `kbtg-demo-aes128`, `kbtg-demo-aes256`, `kbtg-demo-kek`.
+`scripts/provision_dsm.py` creates the six keys listed in `config/demo_keys.yaml` (non-exportable).
 
 Verify everything end-to-end before a customer session:
 
@@ -109,19 +125,19 @@ so old and new formats coexist and re-encryption can run online, in batches, and
 | AES-128 → AES-256 | `config.yaml: key_name` | New Security Object with 256-bit size |
 | Key rotation | nothing in the app | `POST /crypto/v1/keys/rekey` — new version, same name |
 | Envelope KEK RSA → ML-KEM (post-quantum) | `config.yaml: kek_name` (app asks DSM the KEK type: AES/RSA wrap, MLKEM encapsulate) | `POST /crypto/v1/encapsulate` / `decapsulate` + export of the transient DEK; ML-KEM-768 |
-| RSA → AES, same key name | nothing in the app (it asks DSM for the key type, 10 s cache + auto-retry) | Rekey across types is refused, so: rename old key, create AES with the original name (`swap_key_type.py`) |
+| RSA → AES, same key name | nothing in the app (it asks DSM for the key type, 10 s cache + auto-retry) | Rekey across types is refused, so: rename old key, create AES with the original name (`scripts/swap_key_type.py`) |
 | Envelope local algorithm | `config.yaml: local_algorithm` (new algorithms: `crypto_service.LOCAL_CIPHERS`) | DSM wraps the DEK only |
 
 ## Troubleshooting
 * **Smart App Control / "Application Control policy has blocked this file"** on first start: restart the
   app once; Windows checks new DLLs (pandas) on first load.
 * **Audit log**: `GET /sys/v1/logs` returns `{"hits":[{"_source":{...}}]}`. The SDK's generated `LogsApi` model does
-  not match this, so `sdk_client.py` uses the SDK's generic `call_api`. If an app gets 403, show **DSM UI → Audit Log**.
+  not match this, so `dsm_crypto/dsm/sdk_client.py` uses the SDK's generic `call_api`. If an app gets 403, show **DSM UI → Audit Log**.
 * **Rotated keys** keep their kid but are renamed `<name> (rotated at …)`; the new version takes the original name.
 * **No internet at the venue**: set `DSM_BACKEND=mock` in `.env` and restart (simulated keys, same flow).
 * **`bank.db` is locked** when deleting `data\`: another app (e.g. the Streamlit console) still has it open — stop it first.
 * **`connection timeout` on start**: PostgreSQL is not running — start Docker Desktop, then `docker compose up -d`
   (or comment out `DATABASE_URL` in `.env` to use SQLite).
-* **`OperationalError … connection abort`**: Postgres restarted while the app was running. `database.py` now
-  reconnects automatically; if you still see it, restart `bank_app.py`.
+* **`OperationalError … connection abort`**: Postgres restarted while the app was running. `dsm_crypto/database.py` now
+  reconnects automatically; if you still see it, restart `app/bank_app.py`.
 * **psycopg "Application Control policy has blocked this file"**: Smart App Control checks the new DLL once; run again.

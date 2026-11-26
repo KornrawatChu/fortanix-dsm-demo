@@ -1,0 +1,37 @@
+# =====================================================================
+#  Demo keys in Fortanix DSM - owned by the SECURITY team, not the app.
+#  scripts/provision_dsm.py creates any that are missing (idempotent).
+#  The application never reads this file: it only knows the key NAMES
+#  written in config/config.yaml.
+# =====================================================================
+
+keys:
+  - name: kbtg-demo-aes128
+    type: AES
+    size: 128
+    purpose: Legacy policy key (AES-128) - baseline + scenario A
+
+  - name: kbtg-demo-aes256
+    type: AES
+    size: 256
+    purpose: New policy key (AES-256) - scenarios B and C (rotate)
+
+  - name: kbtg-demo-kek
+    type: AES
+    size: 256
+    purpose: Key-Encryption-Key for the envelope pattern
+
+  - name: kbtg-demo-data-key
+    type: RSA
+    size: 2048
+    purpose: Starts as RSA; swapped to AES in scenario E
+
+  - name: kbtg-demo-kek-rsa
+    type: RSA
+    size: 2048
+    purpose: Legacy envelope KEK - RSA-wrapped DEKs (quantum-vulnerable), scenario G
+
+  - name: kbtg-demo-mlkem
+    type: MLKEM
+    size: 768          # ML-KEM parameter set: 512 | 768 | 1024
+    purpose: Post-quantum envelope KEK - ML-KEM-768 encapsulation, scenario G

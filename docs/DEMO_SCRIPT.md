@@ -4,21 +4,21 @@
 ```
 ┌──────────────────────────┬──────────────────────────────┐
 │ Browser                  │ VS Code (เปิดโฟลเดอร์ DSM-Demo)│
-│  tab 1: localhost:5000   │  - config.yaml                 │
+│  tab 1: localhost:5000   │  - config/config.yaml                 │
 │  tab 2: localhost:5000/staff                              │
 │  tab 3: DSM UI (apac)    ├──────────────────────────────┤
 │                          │ Terminal (ใน VS Code)          │
-│                          │  python reencrypt_job.py       │
+│                          │  python scripts/reencrypt_job.py       │
 └──────────────────────────┴──────────────────────────────┘
         + DBeaver (PostgreSQL horizon_bank) เปิดไว้อีกหน้าต่าง
 ```
 
 **ก่อนลูกค้าเข้าห้อง (10 นาที)**
 1. เปิด **Docker Desktop** (รอจนขึ้น Engine running)
-2. Reset ข้อมูล: `docker compose down -v` → `docker compose up -d` และลบไฟล์ `config.yaml` (จะถูกสร้างใหม่เป็น AES-128 / CBC)
+2. Reset ข้อมูล: `docker compose down -v` → `docker compose up -d` และลบไฟล์ `config/config.yaml` (จะถูกสร้างใหม่เป็น AES-128 / CBC)
 3. รัน `tests\smoke_test.py rest` แล้วต้องจบด้วย `ALL ROUND-TRIPS OK`
-4. รัน `python bank_app.py` แล้วเปิด tab ทั้ง 3 ให้พร้อม
-5. ใน VS Code เปิด `config.yaml` ทิ้งไว้ และกด Ctrl+Shift+F ค้นหา `[DSM-INTEGRATION` เตรียมไว้
+4. รัน `python app/bank_app.py` แล้วเปิด tab ทั้ง 3 ให้พร้อม
+5. ใน VS Code เปิด `config/config.yaml` ทิ้งไว้ และกด Ctrl+Shift+F ค้นหา `[DSM-INTEGRATION` เตรียมไว้
 6. DBeaver: connect ไปที่ `horizon_bank` (ดู README) แล้วเปิด SQL Editor เตรียม query ไว้
 
 ---
@@ -45,22 +45,22 @@
 
 | Banner | ไฟล์ | พูดว่า |
 |---|---|---|
-| `0/3 CONNECT` | `bank_app.py` | สร้าง client ครั้งเดียว โดย endpoint และ key มาจาก `.env` |
-| `1/3 AUTHENTICATE` | `dsm/rest_client.py` | App API key แลกเป็น token อายุสั้น |
-| `2/3 ENCRYPT` | `dsm/rest_client.py` | เรียกด้วย **key name** และ `mode` เป็น parameter |
-| `3/3 DECRYPT` | `dsm/rest_client.py` | เรียกด้วย **kid** ที่เก็บไว้กับข้อมูล |
+| `0/3 CONNECT` | `app/bank_app.py` | สร้าง client ครั้งเดียว โดย endpoint และ key มาจาก `.env` |
+| `1/3 AUTHENTICATE` | `dsm_crypto/dsm/rest_client.py` | App API key แลกเป็น token อายุสั้น |
+| `2/3 ENCRYPT` | `dsm_crypto/dsm/rest_client.py` | เรียกด้วย **key name** และ `mode` เป็น parameter |
+| `3/3 DECRYPT` | `dsm_crypto/dsm/rest_client.py` | เรียกด้วย **kid** ที่เก็บไว้กับข้อมูล |
 
 แล้วค้นหา `[DSM-POLICY]` ต่อ:
-- `crypto_service.py`: business code เรียกแค่ `protect()` / `reveal()`
-- `account_repository.py`: โค้ดธุรกิจมีแค่ `enc.protect(...)` **ไม่มี algorithm ไม่มี key**
-- (Option) เปิด `dsm/sdk_client.py` เทียบให้ดูว่า SDK ก็คือ 3 จุดเดิม
+- `dsm_crypto/crypto_service.py`: business code เรียกแค่ `protect()` / `reveal()`
+- `app/account_repository.py`: โค้ดธุรกิจมีแค่ `enc.protect(...)` **ไม่มี algorithm ไม่มี key**
+- (Option) เปิด `dsm_crypto/dsm/sdk_client.py` เทียบให้ดูว่า SDK ก็คือ 3 จุดเดิม
 
 ## ④ เปลี่ยน Algorithm แบบสดๆ (12 นาที) — ไฮไลต์
 **A · CBC → GCM**
-1. ใน VS Code `config.yaml` แก้ `mode: CBC` เป็น `mode: GCM` แล้วกด **Save** (ไม่ต้อง restart)
+1. ใน VS Code `config/config.yaml` แก้ `mode: CBC` เป็น `mode: GCM` แล้วกด **Save** (ไม่ต้อง restart)
 2. ไป tab 1 แล้ว Submit ฟอร์มใหม่
 3. ไป `/staff` จะเห็นรายการใหม่เป็น **DSM AES (GCM)** ส่วนรายการเก่ายังเป็น **CBC** และทั้งคู่เปิดอ่านได้
-4. Terminal: `python reencrypt_job.py` จะแสดง Before/After ว่าทุกค่ากลายเป็น GCM
+4. Terminal: `python scripts/reencrypt_job.py` จะแสดง Before/After ว่าทุกค่ากลายเป็น GCM
 5. Refresh `/staff` จะเห็นว่าเป็น GCM ทั้งหมด
 
 **B · AES-128 → AES-256**
@@ -73,38 +73,38 @@
 - `reencrypt_job.py` เพื่อย้ายข้อมูลเก่ามาใช้ version ใหม่
 
 **E · เปลี่ยนจาก RSA เป็น AES โดยใช้ชื่อ key เดิม (ไม่แตะแอป)**
-- เตรียม: `config.yaml` ตั้ง `key_name: kbtg-demo-data-key` (สมมติว่าระบบเดิมของลูกค้าใช้ RSA) แล้ว Submit 1 ครั้ง → `/staff` แสดง **DSM RSA (OAEP)**
+- เตรียม: `config/config.yaml` ตั้ง `key_name: kbtg-demo-data-key` (สมมติว่าระบบเดิมของลูกค้าใช้ RSA) แล้ว Submit 1 ครั้ง → `/staff` แสดง **DSM RSA (OAEP)**
 - ใน DSM UI → Security Objects → `kbtg-demo-data-key` (RSA-2048):
   1. เปลี่ยนชื่อเป็น `kbtg-demo-data-key (RSA retired)`
   2. **Add Security Object** → AES, 256 bits, ตั้งชื่อ `kbtg-demo-data-key`, Group `KBTG-Demo`, เปิด Encrypt/Decrypt
-  - (ถ้าไม่อยากคลิกเอง: `python swap_key_type.py` ทำ 2 ขั้นนี้ให้)
+  - (ถ้าไม่อยากคลิกเอง: `python scripts/swap_key_type.py` ทำ 2 ขั้นนี้ให้)
 - Submit ฟอร์มอีกครั้ง → รายการใหม่เป็น **DSM AES (GCM)** ส่วนรายการ RSA เก่ายังกด Open อ่านได้
 - Message: **"การเปลี่ยนประเภท key เป็น policy ใน DSM ทีม Security ทำได้เองโดยไม่ต้องรอทีม Dev"**
 - ทำไมต้องย้ายจาก RSA? RSA-2048 encrypt ได้ไม่เกิน 190 bytes ต่อครั้ง และช้ากว่า AES มาก
 - ถ้าเป็นแบบ "rotate" จะทำไม่ได้: DSM ตอบ `cannot rekey into a new object type` ต้องใช้การสร้าง key ใหม่ภายใต้ชื่อเดิมแทน
-- `python reencrypt_job.py` เพื่อย้ายข้อมูล RSA เก่าไปเป็น AES
-- ซ้อมซ้ำ: `python swap_key_type.py kbtg-demo-data-key RSA` จะสลับกลับเป็น RSA
+- `python scripts/reencrypt_job.py` เพื่อย้ายข้อมูล RSA เก่าไปเป็น AES
+- ซ้อมซ้ำ: `python scripts/swap_key_type.py kbtg-demo-data-key RSA` จะสลับกลับเป็น RSA
 
 **F · Re-encryption แบบ online + หยุดแล้วทำต่อได้** (ประมาณ 4 นาที, ใช้ต่อจากฉาก A ได้)
-- เตรียมก่อนเดโม: `python seed_data.py 100` ตอน config ยังเป็น CBC (ใช้เวลาประมาณ 45 วินาที)
-- แก้ `mode: GCM` → รัน `python reencrypt_job.py` (100 แถวใช้เวลาประมาณ 65 วินาที)
+- เตรียมก่อนเดโม: `python scripts/seed_data.py 100` ตอน config ยังเป็น CBC (ใช้เวลาประมาณ 45 วินาที)
+- แก้ `mode: GCM` → รัน `python scripts/reencrypt_job.py` (100 แถวใช้เวลาประมาณ 65 วินาที)
 - ระหว่างที่ progress bar วิ่ง → Submit ฟอร์ม 1 รายการ → **ใช้งานได้ปกติ**
 - กด **Ctrl+C** → `STOPPED … nothing half-written`
 - DBeaver query สรุป → เห็น CBC กับ GCM อยู่ร่วมกัน → เปิด `/staff` ดูได้ทั้งสองแบบ
 - รัน `reencrypt_job.py` อีกครั้ง → ทำต่อจากที่ค้าง (`already on the current policy`) → GCM ทั้งหมด
 
 **G · Post-Quantum: ย้าย envelope จาก RSA ไป ML-KEM** (ประมาณ 4 นาที)
-- เตรียม: `config.yaml` → `pattern: envelope`, `kek_name: kbtg-demo-kek-rsa` → Submit 1–2 ครั้ง → `/staff` = **DEK wrapped by DSM RSA-OAEP**
+- เตรียม: `config/config.yaml` → `pattern: envelope`, `kek_name: kbtg-demo-kek-rsa` → Submit 1–2 ครั้ง → `/staff` = **DEK wrapped by DSM RSA-OAEP**
 - พูด: *"DEK ถูกห่อด้วย RSA ซึ่ง quantum computer ถอดได้ ใครเก็บ ciphertext ไว้วันนี้ อนาคตเปิดได้ (harvest now, decrypt later)"*
 - แก้ `kek_name: kbtg-demo-mlkem` → Save → Submit → **DEK encapsulated by DSM ML-KEM (post-quantum)**
 - DBeaver/`/staff/<ref>` → `wdek.alg = MLKEM`, ciphertext 1,088 bytes (ML-KEM-768) เทียบกับ RSA 256 bytes
-- `python reencrypt_job.py` → ทุกรายการย้ายเป็น ML-KEM · รายการ RSA เก่าอ่านได้ระหว่างทาง
+- `python scripts/reencrypt_job.py` → ทุกรายการย้ายเป็น ML-KEM · รายการ RSA เก่าอ่านได้ระหว่างทาง
 - DSM UI → `kbtg-demo-mlkem` = type **MLKEM**, ops ENCAPSULATE/DECAPSULATE
 - Message: *"ข้อมูลยังใช้ AES-256 (ทน quantum อยู่แล้ว) สิ่งที่เปลี่ยนคือการปกป้อง key ที่เป็น asymmetric — แก้ config 1 บรรทัด"*
 
 **D · ถ้าเป็นแบบ hardcode ล่ะ?**
-- เปิด `legacy_hardcoded.py` แล้วค้นหา `!ALGO` จะเจอ **13 จุดใน 4 ที่** ที่ต้องแก้ ไม่มี kid ให้รู้ว่าข้อมูลเป็นแบบเก่าหรือใหม่ และ key อยู่บน server
-- เทียบกับที่เพิ่งทำไป: **1 บรรทัดใน config.yaml**
+- เปิด `extras/legacy_hardcoded.py` แล้วค้นหา `!ALGO` จะเจอ **13 จุดใน 4 ที่** ที่ต้องแก้ ไม่มี kid ให้รู้ว่าข้อมูลเป็นแบบเก่าหรือใหม่ และ key อยู่บน server
+- เทียบกับที่เพิ่งทำไป: **1 บรรทัดใน config/config.yaml**
 
 ## ⑤ Audit (5 นาที) — Compliance
 - DSM UI → **Audit Log**: จะเห็นว่า `App "kbtg-demo-app" used key … to perform "Encryption"`, การ rotate และเวลาที่เกิดขึ้น
@@ -123,4 +123,4 @@
 
 **สำรอง DB:** ถ้า Docker มีปัญหา ใส่ `#` หน้า `DATABASE_URL` ใน `.env` แอปจะกลับไปใช้ SQLite (`data\bank.db`) ซึ่ง DBeaver ก็เปิดได้เหมือนกัน
 
-**สำรอง:** ถ้าเน็ตใช้ไม่ได้ ให้ตั้ง `DSM_BACKEND=mock` ใน `.env` แล้ว restart และถ้าลูกค้าอยากเจาะลึก (benchmark Direct vs Envelope, key inventory) ให้เปิด `streamlit run console_app.py`
+**สำรอง:** ถ้าเน็ตใช้ไม่ได้ ให้ตั้ง `DSM_BACKEND=mock` ใน `.env` แล้ว restart และถ้าลูกค้าอยากเจาะลึก (benchmark Direct vs Envelope, key inventory) ให้เปิด `streamlit run extras/console_app.py`

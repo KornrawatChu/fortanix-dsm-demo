@@ -1,19 +1,23 @@
 """
 Show what is REALLY stored in the database - straight SQL, no app logic, no DSM call.
 
-    python show_db.py            # one line per application: which key version (kid) protects it
-    python show_db.py --raw      # full stored value of every encrypted column
+    python scripts/show_db.py            # one line per application: which key version (kid) protects it
+    python scripts/show_db.py --raw      # full stored value of every encrypted column
 
 (For the most convincing view, open the same table in DBeaver - see README.)
 """
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
 import json
 import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 
-load_dotenv(Path(__file__).resolve().parent / ".env")
-from account_repository import ENCRYPTED_FIELDS, TABLE, connect  # noqa: E402
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+from app.account_repository import ENCRYPTED_FIELDS, TABLE, connect  # noqa: E402
 
 db = connect()
 rows = db.execute(f"SELECT * FROM {TABLE} ORDER BY id").fetchall()

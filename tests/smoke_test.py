@@ -12,14 +12,14 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from dotenv import load_dotenv  # noqa: E402
 
-import mock_data  # noqa: E402
-import reencrypt_job  # noqa: E402
-from crypto_service import FieldEncryptor, describe  # noqa: E402
-from customer_repository import add_customer, connect, get_customer, list_raw  # noqa: E402
-from dsm import create_client  # noqa: E402
-from dsm.mock_client import MockDsmClient  # noqa: E402
-from settings import Settings  # noqa: E402
-from setup_dsm import ensure_keys  # noqa: E402
+from app import mock_data  # noqa: E402
+from scripts import reencrypt_job  # noqa: E402
+from dsm_crypto.crypto_service import FieldEncryptor, describe  # noqa: E402
+from extras.customer_repository import SENSITIVE, add_customer, connect, get_customer, list_raw  # noqa: E402
+from dsm_crypto.dsm import create_client  # noqa: E402
+from dsm_crypto.dsm.mock_client import MockDsmClient  # noqa: E402
+from dsm_crypto.settings import Settings  # noqa: E402
+from scripts.provision_dsm import ensure_keys  # noqa: E402
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 tmp = Path(tempfile.mkdtemp())
@@ -55,25 +55,25 @@ print("baseline:", mix())
 enc = FieldEncryptor(dsm, policy(mode="GCM"))
 ids.append(add_customer(db, enc, people[3]))
 print("after CBC->GCM, before re-encrypt:", mix())
-print(reencrypt_job.run(db, enc))
+print(reencrypt_job.run(db, enc, table="customers", fields=SENSITIVE))
 print("after re-encrypt:", mix())
 
 # B) AES-128 -> AES-256
 enc = FieldEncryptor(dsm, policy(mode="GCM", key_name="kbtg-demo-aes256"))
-print(reencrypt_job.run(db, enc))
+print(reencrypt_job.run(db, enc, table="customers", fields=SENSITIVE))
 print("after 128->256:", mix())
 
 # C) rotation (no config change)
 dsm.rotate_key("kbtg-demo-aes256")
 ids.append(add_customer(db, enc, people[4]))
 print("after rotation, before re-encrypt:", mix())
-print(reencrypt_job.run(db, enc))
+print(reencrypt_job.run(db, enc, table="customers", fields=SENSITIVE))
 print("after rotation re-encrypt:", mix())
 
 # Envelope
 n0 = dsm.call_count()
 enc = FieldEncryptor(dsm, policy(pattern="envelope"))
-print(reencrypt_job.run(db, enc))
+print(reencrypt_job.run(db, enc, table="customers", fields=SENSITIVE))
 ids.append(add_customer(db, enc, people[5]))
 print("envelope:", mix(), "DSM calls:", dsm.call_count() - n0)
 

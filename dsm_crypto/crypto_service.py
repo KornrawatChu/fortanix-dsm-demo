@@ -19,8 +19,8 @@ from cryptography.hazmat.primitives import padding
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from dsm.base import DsmClient, DsmError, b64d, b64e
-from settings import Settings
+from dsm_crypto.dsm.base import DsmClient, DsmError, b64d, b64e
+from dsm_crypto.settings import Settings
 
 FORMAT_VERSION = 1
 

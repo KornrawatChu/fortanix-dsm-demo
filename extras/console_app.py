@@ -1,9 +1,13 @@
 """
 KBTG x Fortanix DSM - integration & crypto-agility demo.
 
-    streamlit run app.py
+    streamlit run extras/console_app.py
 """
 from __future__ import annotations
+
+import sys as _sys
+from pathlib import Path as _Path
+_sys.path.insert(0, str(_Path(__file__).resolve().parents[1]))  # project root on the import path
 
 import dataclasses
 import inspect
@@ -18,18 +22,18 @@ import requests
 import streamlit as st
 from dotenv import load_dotenv
 
-import customer_repository as repo
-import legacy_hardcoded
-import mock_data
-import reencrypt_job
-import settings
-from crypto_service import LOCAL_CIPHERS, FieldEncryptor, describe
-from dsm import DsmError, create_client
-from dsm.rest_client import RestDsmClient
-from dsm.sdk_client import SdkDsmClient
-from setup_dsm import DEMO_KEYS, ensure_keys
+from extras import customer_repository as repo
+from extras import legacy_hardcoded
+from app import mock_data
+from scripts import reencrypt_job
+from dsm_crypto import settings
+from dsm_crypto.crypto_service import LOCAL_CIPHERS, FieldEncryptor, describe
+from dsm_crypto.dsm import DsmError, create_client
+from dsm_crypto.dsm.rest_client import RestDsmClient
+from dsm_crypto.dsm.sdk_client import SdkDsmClient
+from scripts.provision_dsm import DEMO_KEYS, ensure_keys
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parents[1]   # project root (.env lives here)
 load_dotenv(ROOT / ".env")
 st.set_page_config(page_title="KBTG x Fortanix DSM Demo", page_icon="🔐", layout="wide")
 
@@ -130,7 +134,7 @@ with st.sidebar:
                      hide_index=True, use_container_width=True)
 
     s = enc.s
-    st.markdown("### Current policy (`config.yaml`)")
+    st.markdown("### Current policy (`config/config.yaml`)")
     if s.pattern == "direct":
         st.code(f"pattern : direct\nkey     : {s.key_name}\nmode    : {s.mode}", language="yaml")
     else:
@@ -173,7 +177,7 @@ with tabs[0]:
     }""", use_container_width=True)
 
     c = st.columns(4)
-    c[0].markdown("#### 👩‍💻 Dev\n- 3 REST calls: **auth, encrypt, decrypt**\n- One module (`dsm/`) to own\n"
+    c[0].markdown("#### 👩‍💻 Dev\n- 3 REST calls: **auth, encrypt, decrypt**\n- One module (`dsm_crypto/dsm/`) to own\n"
                   "- REST or official SDK - same API\n- Business code never touches keys or algorithms")
     c[1].markdown("#### 🛡️ Security\n- Keys generated & kept in DSM HSM, **non-exportable**\n"
                   "- App authenticates with an App API key → short-lived token\n"
@@ -240,16 +244,16 @@ with tabs[1]:
 # --------------------------------------------------------------------------- #
 with tabs[2]:
     st.subheader("Where the application connects to DSM")
-    st.markdown("All DSM traffic goes through **one package: `dsm/`**. It exposes three operations. "
+    st.markdown("All DSM traffic goes through **one package: `dsm_crypto/dsm/`**. It exposes three operations. "
                 "Everything else in the app calls `protect()` / `reveal()` and never sees a key.")
     layer = st.radio("Show layer", ["① DSM client (REST vs SDK)", "② crypto_service.py", "③ Business code",
                                     "④ curl equivalent"], horizontal=True)
     if layer.startswith("①"):
         op = st.radio("Operation", ["authenticate", "encrypt", "decrypt"], horizontal=True)
         a, b = st.columns(2)
-        a.markdown("**REST - `dsm/rest_client.py`** (`requests`, works the same from any language)")
+        a.markdown("**REST - `dsm_crypto/dsm/rest_client.py`** (`requests`, works the same from any language)")
         a.code(clean_source(getattr(RestDsmClient, op)), language="python")
-        b.markdown("**Official SDK - `dsm/sdk_client.py`** (`pip install sdkms`)")
+        b.markdown("**Official SDK - `dsm_crypto/dsm/sdk_client.py`** (`pip install sdkms`)")
         b.code(clean_source(getattr(SdkDsmClient, op)), language="python")
         st.caption("Call-inspector instrumentation lines are hidden here; see the files for the full code.")
     elif layer.startswith("②"):
@@ -426,7 +430,8 @@ with tabs[4]:
         if st.button("♻ Run re-encryption job", type="primary"):
             bar = st.progress(0.0)
             n0 = dsm.call_count()
-            stats = safe(reencrypt_job.run, db, enc, lambda i, t: bar.progress(i / t))
+            stats = safe(reencrypt_job.run, db, enc, lambda i, t: bar.progress(i / t),
+                         table="customers", fields=repo.SENSITIVE)
             if stats:
                 stats["DSM calls"] = calls_since(dsm, n0)
                 st.session_state.reenc = stats
