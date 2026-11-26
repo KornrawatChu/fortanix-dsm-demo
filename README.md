@@ -34,6 +34,7 @@ The customer sees a normal app. The integration is shown where developers really
 | `console_app.py` | Streamlit engineer console (backup for deep-dive Q&A) |
 | `tests/smoke_test.py` | End-to-end test of scenarios A–C + envelope |
 | `tests/rsa_to_aes_test.py` | End-to-end test of scenario E (RSA → AES, same name) |
+| `tests/pqc_envelope_test.py` | End-to-end test of scenario G (envelope KEK RSA → ML-KEM) |
 
 ## 1. Prepare Fortanix DSM SaaS (one time, ~5 min)
 
@@ -107,6 +108,7 @@ so old and new formats coexist and re-encryption can run online, in batches, and
 | CBC → GCM | `config.yaml: mode` | Parameter of the encrypt call; same key |
 | AES-128 → AES-256 | `config.yaml: key_name` | New Security Object with 256-bit size |
 | Key rotation | nothing in the app | `POST /crypto/v1/keys/rekey` — new version, same name |
+| Envelope KEK RSA → ML-KEM (post-quantum) | `config.yaml: kek_name` (app asks DSM the KEK type: AES/RSA wrap, MLKEM encapsulate) | `POST /crypto/v1/encapsulate` / `decapsulate` + export of the transient DEK; ML-KEM-768 |
 | RSA → AES, same key name | nothing in the app (it asks DSM for the key type, 10 s cache + auto-retry) | Rekey across types is refused, so: rename old key, create AES with the original name (`swap_key_type.py`) |
 | Envelope local algorithm | `config.yaml: local_algorithm` (new algorithms: `crypto_service.LOCAL_CIPHERS`) | DSM wraps the DEK only |
 

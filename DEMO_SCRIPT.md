@@ -93,6 +93,15 @@
 - DBeaver query สรุป → เห็น CBC กับ GCM อยู่ร่วมกัน → เปิด `/staff` ดูได้ทั้งสองแบบ
 - รัน `reencrypt_job.py` อีกครั้ง → ทำต่อจากที่ค้าง (`already on the current policy`) → GCM ทั้งหมด
 
+**G · Post-Quantum: ย้าย envelope จาก RSA ไป ML-KEM** (ประมาณ 4 นาที)
+- เตรียม: `config.yaml` → `pattern: envelope`, `kek_name: kbtg-demo-kek-rsa` → Submit 1–2 ครั้ง → `/staff` = **DEK wrapped by DSM RSA-OAEP**
+- พูด: *"DEK ถูกห่อด้วย RSA ซึ่ง quantum computer ถอดได้ ใครเก็บ ciphertext ไว้วันนี้ อนาคตเปิดได้ (harvest now, decrypt later)"*
+- แก้ `kek_name: kbtg-demo-mlkem` → Save → Submit → **DEK encapsulated by DSM ML-KEM (post-quantum)**
+- DBeaver/`/staff/<ref>` → `wdek.alg = MLKEM`, ciphertext 1,088 bytes (ML-KEM-768) เทียบกับ RSA 256 bytes
+- `python reencrypt_job.py` → ทุกรายการย้ายเป็น ML-KEM · รายการ RSA เก่าอ่านได้ระหว่างทาง
+- DSM UI → `kbtg-demo-mlkem` = type **MLKEM**, ops ENCAPSULATE/DECAPSULATE
+- Message: *"ข้อมูลยังใช้ AES-256 (ทน quantum อยู่แล้ว) สิ่งที่เปลี่ยนคือการปกป้อง key ที่เป็น asymmetric — แก้ config 1 บรรทัด"*
+
 **D · ถ้าเป็นแบบ hardcode ล่ะ?**
 - เปิด `legacy_hardcoded.py` แล้วค้นหา `!ALGO` จะเจอ **13 จุดใน 4 ที่** ที่ต้องแก้ ไม่มี kid ให้รู้ว่าข้อมูลเป็นแบบเก่าหรือใหม่ และ key อยู่บน server
 - เทียบกับที่เพิ่งทำไป: **1 บรรทัดใน config.yaml**

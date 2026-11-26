@@ -13,6 +13,8 @@ DEMO_KEYS = [
     ("kbtg-demo-aes256", "AES", 256, "New policy key (AES-256)"),
     ("kbtg-demo-kek", "AES", 256, "Key-Encryption-Key for envelope pattern"),
     ("kbtg-demo-data-key", "RSA", 2048, "Starts as RSA; swapped to AES in scenario E"),
+    ("kbtg-demo-kek-rsa", "RSA", 2048, "Legacy envelope KEK: RSA-wrapped DEKs (quantum-vulnerable)"),
+    ("kbtg-demo-mlkem", "MLKEM", 768, "Post-quantum envelope KEK: ML-KEM-768 encapsulation"),
 ]
 
 
@@ -21,9 +23,15 @@ def ensure_keys(dsm: DsmClient) -> list[tuple[str, str, str]]:
     for name, typ, size, purpose in DEMO_KEYS:
         k = dsm.get_key(name)
         if k:
-            out.append((name, k.kid, f"exists ({k.obj_type}-{k.key_size})"))
+            size_label = k.key_size or (k.raw.get("mlkem") or {}).get("param_set", "")
+            out.append((name, k.kid, f"exists ({k.obj_type}-{size_label})"))
             continue
-        k = dsm.create_rsa_key(name, size) if typ == "RSA" else dsm.create_aes_key(name, size)
+        if typ == "RSA":
+            k = dsm.create_rsa_key(name, size)
+        elif typ == "MLKEM":
+            k = dsm.create_mlkem_key(name, f"MlKem{size}")
+        else:
+            k = dsm.create_aes_key(name, size)
         out.append((name, k.kid, f"created ({typ}-{size}) - {purpose}"))
     return out
 

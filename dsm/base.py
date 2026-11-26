@@ -19,6 +19,10 @@ DEMO_KEY_OPS = ["ENCRYPT", "DECRYPT", "WRAPKEY", "UNWRAPKEY", "APPMANAGEABLE"]
 RSA_KEY_OPS = ["ENCRYPT", "DECRYPT", "APPMANAGEABLE"]
 # RSA keys must declare which paddings they allow; the demo uses OAEP with SHA-256.
 RSA_OPTIONS = {"encryption_policy": [{"padding": {"OAEP": {"mgf": {"mgf1": {"hash": "SHA256"}}}}}]}
+MLKEM_KEY_OPS = ["ENCAPSULATE", "DECAPSULATE", "APPMANAGEABLE"]
+# The DEK that encapsulate/decapsulate creates: transient (lives only in this DSM session)
+# and exportable once, so the app can use it locally like any envelope DEK.
+KEM_DEK_REQUEST = {"key_type": "AES", "transient": True, "key_ops": ["ENCRYPT", "DECRYPT", "EXPORT"]}
 
 
 class DsmError(RuntimeError):
@@ -130,6 +134,20 @@ class DsmClient(ABC):
 
     @abstractmethod
     def rename_key(self, kid: str, new_name: str) -> KeyInfo: ...
+
+    # ---- post-quantum key encapsulation (ML-KEM) -------------------------
+    @abstractmethod
+    def create_mlkem_key(self, name: str, param_set: str = "MlKem768",
+                         group_id: Optional[str] = None) -> KeyInfo: ...
+
+    @abstractmethod
+    def encapsulate(self, key_name: str, dek_bits: int = 256) -> tuple[bytes, bytes]:
+        """ML-KEM encapsulate with the key called `key_name`.
+        Returns (kem_ciphertext, dek): a fresh AES DEK made inside DSM + its encapsulation."""
+
+    @abstractmethod
+    def decapsulate(self, kid: str, kem_ciphertext: bytes, dek_bits: int = 256) -> bytes:
+        """ML-KEM decapsulate with the exact key version (kid) -> the same AES DEK."""
 
     @abstractmethod
     def rotate_key(self, name: str) -> KeyInfo: ...

@@ -96,16 +96,20 @@ class FieldEncryptor:
     KEY_TYPE_TTL = 10.0       # seconds; a key-type change in DSM is picked up within this time
     RSA_MAX_PLAINTEXT = 190   # RSA-2048 + OAEP/SHA-256 can encrypt at most 190 bytes
 
-    def _key_type(self, name: str, refresh: bool = False) -> str:
-        """Ask DSM what TYPE the key behind this name is (AES / RSA), cached briefly.
-        This is what lets the security team swap RSA -> AES in DSM with no app change."""
+    def _key_lookup(self, name: str, refresh: bool = False) -> tuple[str, str]:
+        """Ask DSM what TYPE (AES / RSA / MLKEM) and current kid the key behind this name has,
+        cached briefly. This is what lets the security team change the key type in DSM with no
+        app change (RSA -> AES for data, RSA -> ML-KEM for envelope KEKs)."""
         hit = self._type_cache.get(name)
-        if refresh or hit is None or time.monotonic() - hit[1] > self.KEY_TYPE_TTL:
+        if refresh or hit is None or time.monotonic() - hit[2] > self.KEY_TYPE_TTL:
             k = self.dsm.get_key(name)
             if k is None:
                 raise DsmError(f"Key '{name}' not found in DSM")
-            hit = self._type_cache[name] = (k.obj_type, time.monotonic())
-        return hit[0]
+            hit = self._type_cache[name] = (k.obj_type, k.kid, time.monotonic())
+        return hit[0], hit[1]
+
+    def _key_type(self, name: str, refresh: bool = False) -> str:
+        return self._key_lookup(name, refresh)[0]
 
     def mode_for(self, alg: str) -> str:
         return self.s.rsa_mode if alg == "RSA" else self.s.mode
@@ -128,19 +132,32 @@ class FieldEncryptor:
                 "mode": mode, "iv": b64e(r.iv), "tag": b64e(r.tag), "ct": b64e(r.cipher)}
 
     # =====================================================================
-    # Pattern 2: ENVELOPE - app does the crypto, DSM protects the DEK
+    # Pattern 2: ENVELOPE - app does the crypto, DSM protects the DEK.
+    # How the DEK is protected follows the TYPE of the KEK in DSM:
+    #   AES   -> DSM wraps the DEK (AES-GCM)
+    #   RSA   -> DSM wraps the DEK (RSA-OAEP)       <- quantum-vulnerable
+    #   MLKEM -> DSM ENCAPSULATES a fresh DEK (ML-KEM, FIPS 203, post-quantum)
     # =====================================================================
+    def _new_dek(self, bits: int) -> tuple[bytes, dict]:
+        kek = self.s.kek_name
+        kek_type, kek_kid = self._key_lookup(kek)
+        if kek_type == "MLKEM":
+            kem_ct, dek = self.dsm.encapsulate(kek, bits)                   # [PQC] DEK made + sealed in DSM
+            return dek, {"kid": kek_kid, "alg": "MLKEM", "ct": b64e(kem_ct)}
+        dek = os.urandom(bits // 8)                                          # DEK born in app memory
+        mode = self.s.rsa_mode if kek_type == "RSA" else self.s.kek_mode
+        w = self.dsm.encrypt(kek, dek, mode, alg=kek_type)                   # ...wrapped by the DSM KEK
+        return dek, {"kid": w.kid, "alg": kek_type, "mode": mode, "iv": b64e(w.iv),
+                     "tag": b64e(w.tag), "ct": b64e(w.cipher)}
+
     def _current_dek(self) -> dict:
         d = self._dek
         if (d is None or d["uses"] >= self.s.dek_max_records or d["alg"] != self.s.local_algorithm
-                or d["kek"] != self.s.kek_name):
+                or d["kek"] != self.s.kek_name or d["kek_kid"] != self._key_lookup(self.s.kek_name)[1]):
             cipher = LOCAL_CIPHERS[self.s.local_algorithm]
-            dek = os.urandom(cipher.key_bytes)                        # DEK born in app memory
-            w = self.dsm.encrypt(self.s.kek_name, dek, self.s.kek_mode)  # ...wrapped by DSM KEK
-            wrapped = {"kid": w.kid, "mode": self.s.kek_mode, "iv": b64e(w.iv),
-                       "tag": b64e(w.tag), "ct": b64e(w.cipher)}
-            d = self._dek = {"dek": dek, "wrapped": wrapped, "uses": 0,
-                             "alg": self.s.local_algorithm, "kek": self.s.kek_name}
+            dek, wrapped = self._new_dek(cipher.key_bytes * 8)
+            d = self._dek = {"dek": dek, "wrapped": wrapped, "uses": 0, "alg": self.s.local_algorithm,
+                             "kek": self.s.kek_name, "kek_kid": wrapped["kid"]}
             self._dek_cache[wrapped["ct"]] = dek
         d["uses"] += 1
         return d
@@ -155,7 +172,12 @@ class FieldEncryptor:
         w = rec["wdek"]
         dek = self._dek_cache.get(w["ct"])
         if dek is None:                                                # 1 DSM call per DEK, not per record
-            dek = self.dsm.decrypt(w["kid"], b64d(w["ct"]), w["mode"], b64d(w.get("iv")), b64d(w.get("tag")))
+            kek_alg = w.get("alg", "AES")
+            if kek_alg == "MLKEM":                                     # [PQC] decapsulate by exact kid
+                dek = self.dsm.decapsulate(w["kid"], b64d(w["ct"]), LOCAL_CIPHERS[rec["alg"]].key_bytes * 8)
+            else:
+                dek = self.dsm.decrypt(w["kid"], b64d(w["ct"]), w["mode"], b64d(w.get("iv")),
+                                       b64d(w.get("tag")), alg=kek_alg)
             self._dek_cache[w["ct"]] = dek
         return dek
 
@@ -169,7 +191,15 @@ def describe(stored: str) -> dict:
         mode = "OAEP" if rec["mode"].startswith("OAEP") else rec["mode"]
         algo = f"DSM {rec.get('alg', 'AES')} ({mode})"
     else:
-        algo = f"Local {rec['alg']} / DEK wrapped by DSM ({rec['wdek']['mode']})"
+        w = rec["wdek"]
+        kek_alg = w.get("alg", "AES")
+        if kek_alg == "MLKEM":
+            how = "DEK encapsulated by DSM ML-KEM (post-quantum)"
+        elif kek_alg == "RSA":
+            how = "DEK wrapped by DSM RSA-OAEP"
+        else:
+            how = f"DEK wrapped by DSM AES ({w.get('mode')})"
+        algo = f"Local {rec['alg']} / {how}"
     return {"pattern": rec["p"], "key_name": rec["key"], "kid": rec["kid"], "algorithm": algo}
 
 
@@ -181,5 +211,8 @@ def is_current(stored: str, s: Settings, current_kid: Optional[str]) -> bool:
         alg = rec.get("alg", "AES")
         expected_mode = s.rsa_mode if alg == "RSA" else s.mode
         return rec["key"] == s.key_name and rec["mode"] == expected_mode and rec["kid"] == current_kid
+    w = rec["wdek"]
+    kek_alg = w.get("alg", "AES")
+    expected_mode = {"AES": s.kek_mode, "RSA": s.rsa_mode}.get(kek_alg)   # MLKEM has no mode
     return (rec["key"] == s.kek_name and rec["alg"] == s.local_algorithm
-            and rec["wdek"]["mode"] == s.kek_mode and rec["kid"] == current_kid)
+            and w.get("mode") == expected_mode and rec["kid"] == current_kid)

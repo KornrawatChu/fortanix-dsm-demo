@@ -15,8 +15,9 @@ from typing import Any, Optional
 
 import requests
 
-from .base import (DEMO_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS, DsmClient, DsmError, EncryptResult,
-                   KeyInfo, b64d, b64e, parse_audit_hits, session_expired)
+from .base import (DEMO_KEY_OPS, KEM_DEK_REQUEST, MLKEM_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS,
+                   DsmClient, DsmError, EncryptResult, KeyInfo, b64d, b64e, parse_audit_hits,
+                   session_expired)
 
 
 def key_info_from_json(j: dict) -> KeyInfo:
@@ -145,6 +146,31 @@ class RestDsmClient(DsmClient):
 
     def rename_key(self, kid: str, new_name: str) -> KeyInfo:
         return key_info_from_json(self._call("PATCH", f"/crypto/v1/keys/{kid}", {"name": new_name}))
+
+    # ------------------------------------------------------------------ #
+    # Post-quantum: ML-KEM key encapsulation (envelope pattern KEK)       #
+    # ------------------------------------------------------------------ #
+    def create_mlkem_key(self, name: str, param_set: str = "MlKem768",
+                         group_id: Optional[str] = None) -> KeyInfo:
+        body = {"name": name, "obj_type": "MLKEM", "mlkem": {"param_set": param_set},
+                "key_ops": MLKEM_KEY_OPS, "description": "KBTG DSM demo key (ML-KEM, post-quantum)"}
+        if group_id or self.group_id:
+            body["group_id"] = group_id or self.group_id
+        return key_info_from_json(self._call("POST", "/crypto/v1/keys", body))
+
+    def _export_transient(self, transient_key: str) -> bytes:
+        return b64d(self._call("POST", "/crypto/v1/keys/export", {"transient_key": transient_key})["value"])
+
+    def encapsulate(self, key_name: str, dek_bits: int = 256) -> tuple[bytes, bytes]:
+        r = self._call("POST", "/crypto/v1/encapsulate",
+                       {"key": {"name": key_name}, "key_size": dek_bits, **KEM_DEK_REQUEST})
+        return b64d(r["ciphertext"]), self._export_transient(r["key"]["transient_key"])
+
+    def decapsulate(self, kid: str, kem_ciphertext: bytes, dek_bits: int = 256) -> bytes:
+        r = self._call("POST", "/crypto/v1/decapsulate",
+                       {"key": {"kid": kid}, "ciphertext": b64e(kem_ciphertext), "key_size": dek_bits,
+                        **KEM_DEK_REQUEST})
+        return self._export_transient(r["transient_key"])
 
     def rotate_key(self, name: str) -> KeyInfo:
         cur = self.get_key(name)

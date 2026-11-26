@@ -20,7 +20,8 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-from .base import DEMO_KEY_OPS, RSA_KEY_OPS, DsmClient, DsmError, EncryptResult, KeyInfo, b64d, b64e
+from .base import (DEMO_KEY_OPS, MLKEM_KEY_OPS, RSA_KEY_OPS, DsmClient, DsmError, EncryptResult, KeyInfo,
+                   b64d, b64e)
 
 
 def _now() -> str:
@@ -187,6 +188,37 @@ class MockDsmClient(DsmClient):
         priv = rsa.generate_private_key(public_exponent=65537, key_size=size)
         return b64e(priv.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
                                        serialization.NoEncryption()))
+
+    # ML-KEM is SIMULATED here (no ML-KEM in the local crypto library): the "encapsulation" is the
+    # DEK sealed with the key's secret. Same interface and behaviour as DSM, not real post-quantum crypto.
+    def create_mlkem_key(self, name: str, param_set: str = "MlKem768",
+                         group_id: Optional[str] = None) -> KeyInfo:
+        def do():
+            kid = str(uuid.uuid4())
+            self.state["keys"][kid] = {"kid": kid, "name": name, "key_size": int("".join(c for c in param_set if c.isdigit())),
+                                       "type": "MLKEM", "key_ops": MLKEM_KEY_OPS, "created_at": _now(),
+                                       "value": b64e(os.urandom(32))}
+            self._log("Administrative", f"Created ML-KEM key {name} ({param_set}, simulated)", kid)
+            return self._info(self.state["keys"][kid])
+        return self._wrap("POST", "/crypto/v1/keys", {"name": name, "obj_type": "MLKEM",
+                                                      "mlkem": {"param_set": param_set}}, do)
+
+    def encapsulate(self, key_name: str, dek_bits: int = 256) -> tuple[bytes, bytes]:
+        def do():
+            k = self._by_name(key_name)
+            self._check_alg(k, "MLKEM")
+            dek, nonce = os.urandom(dek_bits // 8), os.urandom(12)
+            self._log("CryptoOperation", f"Encapsulated a DEK with key {key_name}", k["kid"])
+            return nonce + AESGCM(b64d(k["value"])).encrypt(nonce, dek, None), dek
+        return self._wrap("POST", "/crypto/v1/encapsulate", {"key": {"name": key_name}, "key_size": dek_bits}, do)
+
+    def decapsulate(self, kid: str, kem_ciphertext: bytes, dek_bits: int = 256) -> bytes:
+        def do():
+            k = self._by_kid(kid)
+            self._check_alg(k, "MLKEM")
+            self._log("CryptoOperation", f"Decapsulated a DEK with key {k['name']}", kid)
+            return AESGCM(b64d(k["value"])).decrypt(kem_ciphertext[:12], kem_ciphertext[12:], None)
+        return self._wrap("POST", "/crypto/v1/decapsulate", {"key": {"kid": kid}}, do)
 
     def rename_key(self, kid: str, new_name: str) -> KeyInfo:
         def do():

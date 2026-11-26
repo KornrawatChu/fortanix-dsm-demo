@@ -7,14 +7,15 @@ identical: authenticate -> encrypt (by key name) -> decrypt (by kid).
 """
 from __future__ import annotations
 
+import base64
 import time
 from typing import Optional
 
 import sdkms.v1 as v1
 from sdkms.v1.rest import ApiException
 
-from .base import (DEMO_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS, DsmClient, DsmError, EncryptResult,
-                   KeyInfo, parse_audit_hits, session_expired)
+from .base import (DEMO_KEY_OPS, KEM_DEK_REQUEST, MLKEM_KEY_OPS, RSA_KEY_OPS, RSA_OPTIONS,
+                   DsmClient, DsmError, EncryptResult, KeyInfo, parse_audit_hits, session_expired)
 from .rest_client import key_info_from_json
 
 
@@ -159,6 +160,29 @@ class SdkDsmClient(DsmClient):
                 "rsa": RSA_OPTIONS, "group_id": group_id or self.group_id,
                 "description": "KBTG DSM demo key (RSA)"}
         return key_info_from_json(self._raw("ApiClient.call_api", "POST", "/crypto/v1/keys", body))
+
+    # Post-quantum ML-KEM: sdkms 5.11 has no ML-KEM models yet -> generic call_api, same endpoints as REST.
+    def create_mlkem_key(self, name: str, param_set: str = "MlKem768",
+                         group_id: Optional[str] = None) -> KeyInfo:
+        body = {"name": name, "obj_type": "MLKEM", "mlkem": {"param_set": param_set},
+                "key_ops": MLKEM_KEY_OPS, "group_id": group_id or self.group_id,
+                "description": "KBTG DSM demo key (ML-KEM, post-quantum)"}
+        return key_info_from_json(self._raw("ApiClient.call_api", "POST", "/crypto/v1/keys", body))
+
+    def _export_transient(self, transient_key: str) -> bytes:
+        r = self._raw("ApiClient.call_api", "POST", "/crypto/v1/keys/export", {"transient_key": transient_key})
+        return base64.b64decode(r["value"])
+
+    def encapsulate(self, key_name: str, dek_bits: int = 256) -> tuple[bytes, bytes]:
+        r = self._raw("ApiClient.call_api", "POST", "/crypto/v1/encapsulate",
+                      {"key": {"name": key_name}, "key_size": dek_bits, **KEM_DEK_REQUEST})
+        return base64.b64decode(r["ciphertext"]), self._export_transient(r["key"]["transient_key"])
+
+    def decapsulate(self, kid: str, kem_ciphertext: bytes, dek_bits: int = 256) -> bytes:
+        r = self._raw("ApiClient.call_api", "POST", "/crypto/v1/decapsulate",
+                      {"key": {"kid": kid}, "ciphertext": base64.b64encode(kem_ciphertext).decode(),
+                       "key_size": dek_bits, **KEM_DEK_REQUEST})
+        return self._export_transient(r["transient_key"])
 
     def rename_key(self, kid: str, new_name: str) -> KeyInfo:
         return key_info_from_json(self._raw("ApiClient.call_api", "PATCH", f"/crypto/v1/keys/{kid}",
