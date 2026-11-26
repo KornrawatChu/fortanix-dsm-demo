@@ -26,24 +26,30 @@ def run(db, enc: FieldEncryptor, progress: Optional[Callable[[int, int], None]] 
         from customer_repository import SENSITIVE
         fields = SENSITIVE
     kid = current_kid(enc)
-    rows = db.execute(f"SELECT id, {', '.join(fields)} FROM {table}").fetchall()
-    stats = {"rows": len(rows), "values_checked": 0, "values_reencrypted": 0, "already_current": 0}
-    for i, row in enumerate(rows, 1):
-        updates = {}
-        for f in fields:
-            stats["values_checked"] += 1
-            if is_current(row[f], enc.s, kid):
-                stats["already_current"] += 1
-                continue
-            plain = enc.reveal(row[f])          # decrypt with the OLD key/algorithm (from metadata)
-            updates[f] = enc.protect(plain)     # encrypt with the NEW policy (from config.yaml)
-        if updates:
-            sets = ", ".join(f"{f}=?" for f in updates)
-            db.execute(f"UPDATE {table} SET {sets} WHERE id=?", (*updates.values(), row["id"]))
-            stats["values_reencrypted"] += len(updates)
-        if progress:
-            progress(i, len(rows))
-    db.commit()
+    rows = db.execute(f"SELECT id, {', '.join(fields)} FROM {table} ORDER BY id").fetchall()
+    stats = {"rows": len(rows), "rows_processed": 0, "values_checked": 0,
+             "values_reencrypted": 0, "already_current": 0, "interrupted": False}
+    try:
+        for i, row in enumerate(rows, 1):
+            updates = {}
+            for f in fields:
+                if is_current(row[f], enc.s, kid):
+                    stats["already_current"] += 1
+                else:
+                    plain = enc.reveal(row[f])          # decrypt with the OLD key/algorithm (from metadata)
+                    updates[f] = enc.protect(plain)     # encrypt with the NEW policy (from config.yaml)
+            if updates:
+                sets = ", ".join(f"{f}=?" for f in updates)
+                db.execute(f"UPDATE {table} SET {sets} WHERE id=?", (*updates.values(), row["id"]))
+                db.commit()                             # one row at a time -> safe to stop at any moment
+                stats["values_reencrypted"] += len(updates)
+            stats["values_checked"] += len(fields)
+            stats["rows_processed"] = i
+            if progress:
+                progress(i, len(rows))
+    except KeyboardInterrupt:
+        # Ctrl+C: the row in flight was never written, every finished row is committed.
+        stats["interrupted"] = True
     return stats
 
 
@@ -65,7 +71,8 @@ if __name__ == "__main__":
     import settings
     from dsm import create_client
 
-    load_dotenv()
+    from pathlib import Path
+    load_dotenv(Path(__file__).resolve().parent / ".env")
     table = sys.argv[1] if len(sys.argv) > 1 else "account_applications"
     if table == "account_applications":
         import account_repository as repo
@@ -74,10 +81,26 @@ if __name__ == "__main__":
         import customer_repository as repo
         db, fields = repo.connect(), repo.SENSITIVE
 
+    def show(title: str) -> None:
+        print(title)
+        for label, count in policy_summary(db, table, fields).items():
+            print(f"  {count:>5} values  {label}")
+
+    def bar(i: int, n: int) -> None:
+        filled = int(30 * i / n) if n else 30
+        print(f"\r  [{'#' * filled}{'.' * (30 - filled)}] {i}/{n} rows", end="", flush=True)
+
     s = settings.load()
-    print(f"Target policy (config.yaml): pattern={s.pattern} key={s.key_name} mode={s.mode}")
-    print("Before:", *[f"  {v:>4} values  {k}" for k, v in policy_summary(db, table, fields).items()], sep="\n")
-    result = run(db, FieldEncryptor(create_client(), s), lambda i, n: print(f"\r  re-encrypting {i}/{n}", end=""),
-                 table=table, fields=fields)
-    print("\n", result)
-    print("After:", *[f"  {v:>4} values  {k}" for k, v in policy_summary(db, table, fields).items()], sep="\n")
+    print(f"\nTarget policy (config.yaml): pattern={s.pattern}  key={s.key_name}  mode={s.mode}")
+    show("Before:")
+    print("Re-encrypting (Ctrl+C to stop - safe, run again to continue):")
+    r = run(db, FieldEncryptor(create_client(), s), bar, table=table, fields=fields)
+    print()
+    if r["interrupted"]:
+        print(f"\n  STOPPED by user after {r['rows_processed']}/{r['rows']} rows - "
+              f"{r['values_reencrypted']} values migrated, nothing half-written.")
+        print("  Run this job again to continue where it left off.")
+    else:
+        print(f"\n  Done: {r['values_reencrypted']} values re-encrypted, "
+              f"{r['already_current']} already on the current policy.")
+    show("After:")

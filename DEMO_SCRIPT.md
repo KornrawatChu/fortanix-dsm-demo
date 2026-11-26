@@ -85,6 +85,14 @@
 - `python reencrypt_job.py` เพื่อย้ายข้อมูล RSA เก่าไปเป็น AES
 - ซ้อมซ้ำ: `python swap_key_type.py kbtg-demo-data-key RSA` จะสลับกลับเป็น RSA
 
+**F · Re-encryption แบบ online + หยุดแล้วทำต่อได้** (ประมาณ 4 นาที, ใช้ต่อจากฉาก A ได้)
+- เตรียมก่อนเดโม: `python seed_data.py 100` ตอน config ยังเป็น CBC (ใช้เวลาประมาณ 45 วินาที)
+- แก้ `mode: GCM` → รัน `python reencrypt_job.py` (100 แถวใช้เวลาประมาณ 65 วินาที)
+- ระหว่างที่ progress bar วิ่ง → Submit ฟอร์ม 1 รายการ → **ใช้งานได้ปกติ**
+- กด **Ctrl+C** → `STOPPED … nothing half-written`
+- DBeaver query สรุป → เห็น CBC กับ GCM อยู่ร่วมกัน → เปิด `/staff` ดูได้ทั้งสองแบบ
+- รัน `reencrypt_job.py` อีกครั้ง → ทำต่อจากที่ค้าง (`already on the current policy`) → GCM ทั้งหมด
+
 **D · ถ้าเป็นแบบ hardcode ล่ะ?**
 - เปิด `legacy_hardcoded.py` แล้วค้นหา `!ALGO` จะเจอ **13 จุดใน 4 ที่** ที่ต้องแก้ ไม่มี kid ให้รู้ว่าข้อมูลเป็นแบบเก่าหรือใหม่ และ key อยู่บน server
 - เทียบกับที่เพิ่งทำไป: **1 บรรทัดใน config.yaml**

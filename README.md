@@ -21,12 +21,13 @@ The customer sees a normal app. The integration is shown where developers really
 | `account_repository.py` | Business code — calls `protect()` / `reveal()`, no crypto knowledge |
 | `database.py` + `docker-compose.yml` | PostgreSQL (Docker) or SQLite — the DB only ever sees ciphertext |
 | `show_db.py` | Prints what is stored (kid per record) straight from the DB |
+| `seed_data.py` | Adds N fake applications (default 100) for the re-encryption scene |
 | `crypto_service.py` | `[DSM-POLICY]` `protect()` / `reveal()` — direct & envelope, self-describing records |
 | `config.yaml` | `[DSM-POLICY]` **The only file that changes** when the algorithm changes (auto-copied from `config.baseline.yaml`) |
 | `dsm/rest_client.py` | `[DSM-INTEGRATION 1–3/3]` auth · encrypt · decrypt over REST |
 | `dsm/sdk_client.py` | Same three integration points via the official SDK `sdkms` |
 | `dsm/mock_client.py` | Offline DSM simulator (set `DSM_BACKEND=mock` in `.env`) |
-| `reencrypt_job.py` | Online re-encryption to the current policy (run in a terminal) |
+| `reencrypt_job.py` | Online re-encryption to the current policy; commits per row, Ctrl+C is safe, re-run resumes |
 | `legacy_hardcoded.py` | Anti-pattern for comparison (not executed) |
 | `setup_dsm.py` | Creates demo keys in DSM (incl. `kbtg-demo-data-key`, RSA-2048) |
 | `swap_key_type.py` | Changes the key type behind a name (RSA ↔ AES) |
